@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>Wake-on-LAN via GitHub API</title>
+</head>
+<body>
+<h2>Wake-on-LAN Steuerung</h2>
+
+<label>GitHub Token:</label><br />
+<input type="password" id="token" size="50" placeholder="GitHub Personal Access Token" /><br /><br />
+
+<button onclick="updateWake(true)">Wake PC</button>
+<button onclick="updateWake(false)">Reset</button>
+
+<p id="status"></p>
+
+<script>
+const owner = "DanielSan3318";       // GitHub User
+const repo = "ESP-WOL";              // Dein Repo-Name
+const path = "wake.json";            // Datei im Repo
+const branch = "main";               // Branch (meist main oder master)
+
+async function getFileSha(token) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+  const res = await fetch(url, {
+    headers: { Authorization: 'token ' + token }
+  });
+  if (!res.ok) throw new Error('Fehler beim Laden der Datei');
+  const data = await res.json();
+  return data.sha;  // SHA der Datei wird für Update benötigt
+}
+
+async function updateWake(value) {
+  const token = document.getElementById("token").value.trim();
+  if (!token) {
+    alert("Bitte GitHub Token eingeben!");
+    return;
+  }
+
+  document.getElementById("status").innerText = "Bearbeite Datei...";
+
+  try {
+    const sha = await getFileSha(token);
+
+    const contentObj = { wake: value };
+    const contentStr = JSON.stringify(contentObj, null, 2);
+    const contentBase64 = btoa(unescape(encodeURIComponent(contentStr)));
+
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    const body = {
+      message: value ? "Wake PC" : "Reset Wake",
+      content: contentBase64,
+      sha: sha,
+      branch: branch
+    };
+
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: 'token ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Unbekannter Fehler');
+    }
+
+    document.getElementById("status").innerText = value ? "Wake-Befehl gesetzt!" : "Reset durchgeführt!";
+  } catch (e) {
+    document.getElementById("status").innerText = "Fehler: " + e.message;
+  }
+}
+</script>
+</body>
+</html>
